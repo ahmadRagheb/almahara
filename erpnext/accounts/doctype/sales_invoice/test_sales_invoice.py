@@ -42,6 +42,19 @@ class TestSalesInvoice(unittest.TestCase):
 		time.sleep(1)
 		self.assertRaises(frappe.TimestampMismatchError, w2.save)
 
+	def test_sales_invoice_change_naming_series(self):
+		si = frappe.copy_doc(test_records[2])
+		si.insert()
+		si.naming_series = 'TEST-'
+
+		self.assertRaises(frappe.CannotChangeConstantError, si.save)
+
+		si = frappe.copy_doc(test_records[1])
+		si.insert()
+		si.naming_series = 'TEST-'
+
+		self.assertRaises(frappe.CannotChangeConstantError, si.save)
+
 	def test_sales_invoice_calculation_base_currency(self):
 		si = frappe.copy_doc(test_records[2])
 		si.insert()
@@ -1042,6 +1055,25 @@ class TestSalesInvoice(unittest.TestCase):
 		si.load_from_db()
 		#check outstanding after advance cancellation
 		self.assertEqual(flt(si.outstanding_amount), flt(si.grand_total + si.total_advance, si.precision("outstanding_amount")))
+
+	def test_multiple_uom_in_selling(self):
+		si = frappe.copy_doc(test_records[1])
+
+		si.items[0].uom = "_Test UOM 1"
+		si.items[0].conversion_factor = None
+		si.items[0].price_list_rate = None
+		si.save()
+
+		expected_values = {
+			"keys": ["price_list_rate", "stock_uom", "uom", "conversion_factor", "rate", "amount",
+				"base_price_list_rate", "base_rate", "base_amount"],
+			"_Test Item": [1000, "_Test UOM", "_Test UOM 1", 10.0, 1000, 1000, 1000, 1000, 1000]
+		}
+
+		# check if the conversion_factor and price_list_rate is calculated according to uom
+		for d in si.get("items"):
+			for i, k in enumerate(expected_values["keys"]):
+				self.assertEquals(d.get(k), expected_values[d.item_code][i])
 
 def create_sales_invoice(**args):
 	si = frappe.new_doc("Sales Invoice")
